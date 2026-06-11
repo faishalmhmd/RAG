@@ -1,0 +1,24 @@
+global:
+  user: "faishalmhmd"
+  ssh_port: 22
+  deploy_dir: "/home/tidb/tidb-deploy"
+  data_dir: "/home/tidb/tidb-data"
+
+server_configs:
+  tidb:
+    log.level: "info"
+  tikv:
+    storage.block-cache-size: "1GB"
+  pd:
+    replication.enable-placement-rules: true
+
+pd_servers:
+  - host: 127.0.0.1
+
+tidb_servers:
+  - host: 127.0.0.1
+
+tikv_servers:
+  - host: 127.0.0.1
+    port: 20160
+    status_port: 20180

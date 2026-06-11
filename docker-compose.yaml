@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  pd:
+    image: pingcap/pd:v7.5.0
+    command:
+      - --name=pd1
+      - --client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://pd:2379
+      - --data-dir=/data
+    ports:
+      - "2379:2379"
+    volumes:
+      - pd-data:/data
+    networks:
+      - tidb-net
+
+  tikv:
+    image: pingcap/tikv:v7.5.0
+    command:
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=tikv:20160
+      - --data-dir=/data
+      - --pd=pd:2379
+    depends_on:
+      - pd
+    volumes:
+      - tikv-data:/data
+    networks:
+      - tidb-net
+
+  tidb:
+    image: pingcap/tidb:v7.5.0
+    command:
+      - --store=tikv
+      - --path=pd:2379
+    ports:
+      - "4000:4000"
+    depends_on:
+      - tikv
+    networks:
+      - tidb-net
+
+networks:
+  tidb-net:
+
+volumes:
+  pd-data:
+  tikv-data:

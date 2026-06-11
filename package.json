@@ -1,0 +1,23 @@
+{
+  "name": "RAG",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "module",
+  "license": "ISC",
+  "packageManager": "pnpm@10.20.0",
+  "dependencies": {
+    "mysql2": "^3.22.5",
+    "ollama": "^0.6.3",
+    "pdf-parse": "^2.4.5",
+    "pdf-poppler": "^0.2.3",
+    "pdfjs-dist": "^6.0.227",
+    "sharp": "^0.35.0",
+    "tesseract.js": "^7.0.0"
+  }
+}
