@@ -18,6 +18,7 @@
     "pdf-poppler": "^0.2.3",
     "pdfjs-dist": "^6.0.227",
     "sharp": "^0.35.0",
-    "tesseract.js": "^7.0.0"
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
   }
 }

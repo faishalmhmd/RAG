@@ -260,6 +260,9 @@ try {
   const stream = await ollama.chat({
     model: "gemma3",
     stream: true,
+    options: {
+      num_ctx: 8192, // atau lebih, tergantung VRAM
+    },
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: question },
@@ -311,54 +314,54 @@ try {
   // =========================
   // STATS
   // =========================
-  console.log("────────────────────");
-  console.log("📊 STATS");
-  console.log("────────────────────");
-  console.log("Documents loaded:", rows.length);
-  console.log("Valid embeddings:", scored.length);
-  console.log("Top K (after threshold):", top.length);
-  console.log("Answer length:", answer.length);
+  // console.log("────────────────────");
+  // console.log("📊 STATS");
+  // console.log("────────────────────");
+  // console.log("Documents loaded:", rows.length);
+  // console.log("Valid embeddings:", scored.length);
+  // console.log("Top K (after threshold):", top.length);
+  // console.log("Answer length:", answer.length);
 
-  console.log("\n🔢 TOKEN USAGE");
-  console.log("Prompt tokens   :", totalPromptTokens);
-  // console.log("Completion tokens:", totalCompletionTokens);
-  console.log("Total tokens    :", totalPromptTokens + totalCompletionTokens);
+  // console.log("\n🔢 TOKEN USAGE");
+  // console.log("Prompt tokens   :", totalPromptTokens);
+  // // console.log("Completion tokens:", totalCompletionTokens);
+  // console.log("Total tokens    :", totalPromptTokens + totalCompletionTokens);
 
-  // console.log("\n⏱️ TIMING (wall time)");
-  // console.log("Embedding   :", embedDiff.wallMs.toFixed(2), "ms");
-  // console.log("DB query    :", dbDiff.wallMs.toFixed(2), "ms");
-  // console.log("Scoring     :", scoreDiff.wallMs.toFixed(2), "ms");
-  // console.log("Chat (LLM)  :", chatDiff.wallMs.toFixed(2), "ms");
-  // console.log("Total       :", overallDiff.wallMs.toFixed(2), "ms");
+  // // console.log("\n⏱️ TIMING (wall time)");
+  // // console.log("Embedding   :", embedDiff.wallMs.toFixed(2), "ms");
+  // // console.log("DB query    :", dbDiff.wallMs.toFixed(2), "ms");
+  // // console.log("Scoring     :", scoreDiff.wallMs.toFixed(2), "ms");
+  // // console.log("Chat (LLM)  :", chatDiff.wallMs.toFixed(2), "ms");
+  // // console.log("Total       :", overallDiff.wallMs.toFixed(2), "ms");
 
-  // console.log("\n🧠 CPU USAGE (proses node, total)");
-  // console.log("User CPU time  :", overallDiff.cpuUserMs.toFixed(2), "ms");
-  // console.log("System CPU time:", overallDiff.cpuSystemMs.toFixed(2), "ms");
-  // console.log("Total CPU time :", overallDiff.cpuTotalMs.toFixed(2), "ms");
-  // console.log(
-  //   "CPU usage (%)  :",
-  //   ((overallDiff.cpuTotalMs / overallDiff.wallMs) * 100).toFixed(1) + "%"
-  // );
+  // // console.log("\n🧠 CPU USAGE (proses node, total)");
+  // // console.log("User CPU time  :", overallDiff.cpuUserMs.toFixed(2), "ms");
+  // // console.log("System CPU time:", overallDiff.cpuSystemMs.toFixed(2), "ms");
+  // // console.log("Total CPU time :", overallDiff.cpuTotalMs.toFixed(2), "ms");
+  // // console.log(
+  // //   "CPU usage (%)  :",
+  // //   ((overallDiff.cpuTotalMs / overallDiff.wallMs) * 100).toFixed(1) + "%"
+  // // );
 
-  // console.log("\n💾 MEMORY USAGE (akhir proses)");
-  // console.log("RSS         :", formatBytes(mem.rss));
-  // console.log("Heap Total  :", formatBytes(mem.heapTotal));
-  // console.log("Heap Used   :", formatBytes(mem.heapUsed));
-  // console.log("External    :", formatBytes(mem.external));
-  // console.log("Array Buffers:", formatBytes(mem.arrayBuffers));
+  // // console.log("\n💾 MEMORY USAGE (akhir proses)");
+  // // console.log("RSS         :", formatBytes(mem.rss));
+  // // console.log("Heap Total  :", formatBytes(mem.heapTotal));
+  // // console.log("Heap Used   :", formatBytes(mem.heapUsed));
+  // // console.log("External    :", formatBytes(mem.external));
+  // // console.log("Array Buffers:", formatBytes(mem.arrayBuffers));
 
-  console.log("\n🦙 OLLAMA LOADED MODELS");
-  const ollamaModels = await getOllamaMemoryUsage();
-  if (ollamaModels.length === 0) {
-    console.log("(tidak ada info / Ollama tidak merespons)");
-  } else {
-    ollamaModels.forEach((m) => {
-      console.log(`- ${m.name}`);
-      console.log(`  Total size : ${formatBytes(m.size)}`);
-      console.log(`  VRAM size  : ${formatBytes(m.size_vram)}`);
-      console.log(`  Expires at : ${m.expires_at}`);
-    });
-  }
+  // console.log("\n🦙 OLLAMA LOADED MODELS");
+  // const ollamaModels = await getOllamaMemoryUsage();
+  // if (ollamaModels.length === 0) {
+  //   console.log("(tidak ada info / Ollama tidak merespons)");
+  // } else {
+  //   ollamaModels.forEach((m) => {
+  //     console.log(`- ${m.name}`);
+  //     console.log(`  Total size : ${formatBytes(m.size)}`);
+  //     console.log(`  VRAM size  : ${formatBytes(m.size_vram)}`);
+  //     console.log(`  Expires at : ${m.expires_at}`);
+  //   });
+  // }
 } catch (err) {
   stopSpinner();
   console.error("\n❌ Error:", err.message);
