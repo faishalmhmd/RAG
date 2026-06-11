@@ -44,8 +44,6 @@ function cosine(a, b) {
 // =========================
 // PARSE EMBEDDING (FIX UTAMA)
 // =========================
-// mysql2 otomatis parse kolom JSON jadi array/object JS,
-// jadi tidak boleh di-JSON.parse() lagi kalau sudah berupa array.
 function parseEmbedding(raw) {
   if (Array.isArray(raw)) return raw;
 
@@ -82,8 +80,59 @@ function startSpinner(label = "Loading") {
   };
 }
 
+// =========================
+// HELPER: FORMAT BYTES
+// =========================
+function formatBytes(bytes) {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+}
+
+// =========================
+// HELPER: SNAPSHOT RESOURCE USAGE
+// =========================
+function snapshotUsage() {
+  return {
+    cpu: process.cpuUsage(), // { user, system } dalam microseconds
+    mem: process.memoryUsage(), // rss, heapTotal, heapUsed, external, arrayBuffers
+    time: process.hrtime.bigint(),
+  };
+}
+
+function diffUsage(start, end) {
+  const cpuUserMs = (end.cpu.user - start.cpu.user) / 1000;
+  const cpuSystemMs = (end.cpu.system - start.cpu.system) / 1000;
+  const wallMs = Number(end.time - start.time) / 1e6;
+
+  return {
+    cpuUserMs,
+    cpuSystemMs,
+    cpuTotalMs: cpuUserMs + cpuSystemMs,
+    wallMs,
+  };
+}
+
+async function getOllamaMemoryUsage() {
+  try {
+    const res = await fetch("http://127.0.0.1:11434/api/ps");
+    const data = await res.json();
+    return data.models || [];
+  } catch (err) {
+    return [];
+  }
+}
+
 let db;
 let stopSpinner = () => {};
+
+// Tracking total token usage dari semua call ke ollama
+let totalPromptTokens = 0;
+let totalCompletionTokens = 0;
+
+// Snapshot resource di awal program
+const overallStart = snapshotUsage();
 
 try {
   // =========================
@@ -104,12 +153,21 @@ try {
 
   stopSpinner = startSpinner("Embedding pertanyaan...");
 
+  const embedStart = snapshotUsage();
   const embed = await ollama.embeddings({
     model: "bge-m3",
     prompt: question,
   });
+  const embedEnd = snapshotUsage();
 
   stopSpinner();
+
+  // Beberapa versi ollama mengembalikan prompt_eval_count untuk embeddings
+  if (typeof embed.prompt_eval_count === "number") {
+    totalPromptTokens += embed.prompt_eval_count;
+  }
+
+  const embedDiff = diffUsage(embedStart, embedEnd);
 
   const queryVec = embed.embedding;
 
@@ -120,17 +178,23 @@ try {
 
   stopSpinner = startSpinner("Mengambil dokumen dari database...");
 
+  const dbStart = snapshotUsage();
   const [rows] = await db.execute(
     `SELECT content, embedding FROM documents LIMIT ${Number(ROW_LIMIT)}`
   );
+  const dbEnd = snapshotUsage();
 
   stopSpinner();
+
+  const dbDiff = diffUsage(dbStart, dbEnd);
 
   console.log(`📦 Documents loaded: ${rows.length}`);
 
   // =========================
   // PARSE + SCORE
   // =========================
+  const scoreStart = snapshotUsage();
+
   const scored = rows
     .map((r) => {
       const vec = parseEmbedding(r.embedding);
@@ -142,6 +206,9 @@ try {
       };
     })
     .filter(Boolean);
+
+  const scoreEnd = snapshotUsage();
+  const scoreDiff = diffUsage(scoreStart, scoreEnd);
 
   if (scored.length === 0) {
     console.warn(
@@ -188,6 +255,8 @@ try {
       ? `Jawab hanya berdasarkan konteks berikut. Jika informasi tidak ada di konteks, katakan tidak tahu.\n\n=== CONTEXT ===\n${ragContext}`
       : `Tidak ada konteks relevan yang ditemukan di database. Beri tahu pengguna bahwa informasi tidak ditemukan, jangan mengarang jawaban.`;
 
+  const chatStart = snapshotUsage();
+
   const stream = await ollama.chat({
     model: "gemma3",
     stream: true,
@@ -199,6 +268,7 @@ try {
 
   let answer = "";
   let firstChunk = true;
+  let lastChunk = null;
   stopSpinner = startSpinner("Menyusun jawaban...");
 
   for await (const chunk of stream) {
@@ -210,11 +280,33 @@ try {
     const text = chunk.message?.content || "";
     process.stdout.write(text);
     answer += text;
+
+    lastChunk = chunk; // simpan chunk terakhir (biasanya berisi stats saat done: true)
   }
 
   if (firstChunk) stopSpinner(); // jaga-jaga kalau stream kosong
 
+  const chatEnd = snapshotUsage();
+  const chatDiff = diffUsage(chatStart, chatEnd);
+
+  // Ambil token usage dari chunk terakhir (done: true)
+  if (lastChunk) {
+    if (typeof lastChunk.prompt_eval_count === "number") {
+      totalPromptTokens += lastChunk.prompt_eval_count;
+    }
+    if (typeof lastChunk.eval_count === "number") {
+      totalCompletionTokens += lastChunk.eval_count;
+    }
+  }
+
   console.log("\n");
+
+  // =========================
+  // FINAL RESOURCE SNAPSHOT
+  // =========================
+  const overallEnd = snapshotUsage();
+  const overallDiff = diffUsage(overallStart, overallEnd);
+  const mem = process.memoryUsage();
 
   // =========================
   // STATS
@@ -226,6 +318,47 @@ try {
   console.log("Valid embeddings:", scored.length);
   console.log("Top K (after threshold):", top.length);
   console.log("Answer length:", answer.length);
+
+  console.log("\n🔢 TOKEN USAGE");
+  console.log("Prompt tokens   :", totalPromptTokens);
+  // console.log("Completion tokens:", totalCompletionTokens);
+  console.log("Total tokens    :", totalPromptTokens + totalCompletionTokens);
+
+  // console.log("\n⏱️ TIMING (wall time)");
+  // console.log("Embedding   :", embedDiff.wallMs.toFixed(2), "ms");
+  // console.log("DB query    :", dbDiff.wallMs.toFixed(2), "ms");
+  // console.log("Scoring     :", scoreDiff.wallMs.toFixed(2), "ms");
+  // console.log("Chat (LLM)  :", chatDiff.wallMs.toFixed(2), "ms");
+  // console.log("Total       :", overallDiff.wallMs.toFixed(2), "ms");
+
+  // console.log("\n🧠 CPU USAGE (proses node, total)");
+  // console.log("User CPU time  :", overallDiff.cpuUserMs.toFixed(2), "ms");
+  // console.log("System CPU time:", overallDiff.cpuSystemMs.toFixed(2), "ms");
+  // console.log("Total CPU time :", overallDiff.cpuTotalMs.toFixed(2), "ms");
+  // console.log(
+  //   "CPU usage (%)  :",
+  //   ((overallDiff.cpuTotalMs / overallDiff.wallMs) * 100).toFixed(1) + "%"
+  // );
+
+  // console.log("\n💾 MEMORY USAGE (akhir proses)");
+  // console.log("RSS         :", formatBytes(mem.rss));
+  // console.log("Heap Total  :", formatBytes(mem.heapTotal));
+  // console.log("Heap Used   :", formatBytes(mem.heapUsed));
+  // console.log("External    :", formatBytes(mem.external));
+  // console.log("Array Buffers:", formatBytes(mem.arrayBuffers));
+
+  console.log("\n🦙 OLLAMA LOADED MODELS");
+  const ollamaModels = await getOllamaMemoryUsage();
+  if (ollamaModels.length === 0) {
+    console.log("(tidak ada info / Ollama tidak merespons)");
+  } else {
+    ollamaModels.forEach((m) => {
+      console.log(`- ${m.name}`);
+      console.log(`  Total size : ${formatBytes(m.size)}`);
+      console.log(`  VRAM size  : ${formatBytes(m.size_vram)}`);
+      console.log(`  Expires at : ${m.expires_at}`);
+    });
+  }
 } catch (err) {
   stopSpinner();
   console.error("\n❌ Error:", err.message);
